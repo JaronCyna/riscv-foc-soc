@@ -1,0 +1,41 @@
+$date
+	Sat May 09 17:07:25 2026
+$end
+$version
+	Icarus Verilog
+$end
+$timescale
+	1s
+$end
+$scope module instructionMem_tb $end
+$var wire 32 ! instruct [31:0] $end
+$var reg 32 " pc_out [31:0] $end
+$scope module memTest $end
+$var wire 32 # instruct [31:0] $end
+$var wire 32 $ pc_out [31:0] $end
+$var parameter 32 % InsTot $end
+$upscope $end
+$upscope $end
+$enddefinitions $end
+$comment Show the parameter values. $end
+$dumpall
+b100000000 %
+$end
+#0
+$dumpvars
+b0 $
+b10100000000000010010011 #
+b0 "
+b10100000000000010010011 !
+$end
+#1
+b101000000000000100010011 !
+b101000000000000100010011 #
+b100 "
+b100 $
+#2
+b1000001000000110110011 !
+b1000001000000110110011 #
+b1000 "
+b1000 $
+#3
