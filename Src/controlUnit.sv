@@ -8,13 +8,12 @@ module ControlUnit(
     output logic MemRead,
     output logic MemWrite,
     output logic MemtoReg,
-    output logic Branch
-
+    output logic Branch,
+    output logic [2:0] funct3,
+    output logic       funct7_bit6
 );
 
     logic [6:0] opcode;
-    logic [2:0] funct3;
-    logic       funct7_bit6;
 
     assign opcode = inst[6:0];
     assign funct3 = inst[14:12];
@@ -123,6 +122,53 @@ module ControlUnit(
 
         endcase
     
+    end
+
+endmodule
+
+
+module ALU_Sel_Decoder(
+    input logic [1:0] ALUop,
+    input logic [2:0] funct3,
+    input logic       funct7_bit6,
+
+    output logic [3:0] ALU_sel
+);
+
+
+    always @(*) begin
+        case(ALUop)
+          
+            2'd0: ALU_sel = 4'd0;
+            2'd1: ALU_sel = 4'd1;
+            2'd2, 2'd3: begin
+                
+                case(funct3)
+                    
+                    3'b000: begin
+                            if(funct7_bit6 == 1'd1 && ALUop == 2'd2) ALU_sel = 4'd1; //Ensure It is R-Type to prevent I type subtraction
+                            else ALU_sel = 4'd0;
+                            end
+                    3'b111: ALU_sel = 4'd2;
+                    3'b110: ALU_sel = 4'd3;
+                    3'b100: ALU_sel = 4'd4;
+                    3'b001: ALU_sel = 4'd5;
+                    3'b101: begin   
+                            if(funct7_bit6 == 1'd1) ALU_sel = 4'd7;
+                            else ALU_sel = 4'd6;
+                            end
+                    3'b010: ALU_sel = 4'd8;
+                    3'b011: ALU_sel = 4'd9;
+
+                    default: ALU_sel = 4'd0;
+                endcase
+
+            end
+            
+            default: ALU_sel = 4'd0;
+
+        endcase
+
     end
 
 endmodule
