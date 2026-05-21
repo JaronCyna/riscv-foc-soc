@@ -52,7 +52,7 @@ module ControlUnit(
                 end else begin
                     MemRead  = 1'd0;
                     MemtoReg = 1'd0; 
-                    ALUop    = 2'd2;       
+                    ALUop    = 2'd3;       
                 end
                 
                 
@@ -75,7 +75,7 @@ module ControlUnit(
                 ImmSel      = 3'd3; 
                 RegWrite    = 1'd0;
                 ALUSrc      = 1'd0;
-                ALUop       = 2'd01;
+                ALUop       = 2'd1;
                 MemRead     = 1'd0;
                 MemWrite    = 1'd0;
                 MemtoReg    = 1'dx;
@@ -87,7 +87,7 @@ module ControlUnit(
                 ImmSel      = 3'd4; 
                 RegWrite    = 1'd1;
                 ALUSrc      = 1'd1;
-                ALUop       = 2'd00;
+                ALUop       = 2'd0;
                 MemRead     = 1'd0;
                 MemWrite    = 1'd0;
                 MemtoReg    = 1'd0;
@@ -99,7 +99,7 @@ module ControlUnit(
                 ImmSel      = 3'd5; 
                 RegWrite    = 1'd1;
                 ALUSrc      = 1'dx;
-                ALUop       = 2'd00;
+                ALUop       = 2'd0;
                 MemRead     = 1'd0;
                 MemWrite    = 1'd0;
                 MemtoReg    = 1'd0;
@@ -111,7 +111,7 @@ module ControlUnit(
                 ImmSel      = 3'd0;
                 RegWrite    = 1'd0;
                 ALUSrc      = 1'd0;
-                ALUop       = 2'd00;
+                ALUop       = 2'd0;
                 MemRead     = 1'd0;
                 MemWrite    = 1'd0;
                 MemtoReg    = 1'd0;
