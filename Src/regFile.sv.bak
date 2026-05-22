@@ -13,9 +13,10 @@ module regFile (
 
     logic [31:0] mainReg [0:31];
 
+    // ALL modifications to mainReg happen exclusively inside this single process block!
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            
+            // Synchronous or asynchronous master clear
             for (int i = 0; i < 32; i++) begin
                 mainReg[i] <= 32'd0;
             end
@@ -24,7 +25,7 @@ module regFile (
         end
     end
 
-    
+    // Pure Combinational Reads (Perfectly safe, just looking at the data)
     always_comb begin
         rd1 = (rs1 == 5'd0) ? 32'd0 : mainReg[rs1];
         rd2 = (rs2 == 5'd0) ? 32'd0 : mainReg[rs2];
