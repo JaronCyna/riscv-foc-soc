@@ -42,3 +42,9 @@ I had to take a week off to focus on preparing for URC, but I have a few days to
 
 I managed to get the ALU working with minimal hassle, but to understand the immgen a little better I started looking into assembly and learned some things along the way. First the RISCV manual was very helpful for providing diagrams to help with the design process. but I learned that for testbenches you don't want to use the same logic that you have in the module, as that will always give a success even if the logic is wrong. This seems obvious in retrospect but its good to know now. also sv wise I learned its good to use 3 eqaul signs in the if statements as it can catch some smaller formatting errors that 2 wouldnt.
 
+
+# June 7th 2026
+**working on: ControlUnit, ALUdecoder, DataMem and testbenches**
+
+I took a good bit of time off to go to Utah for URC, which was a great experience, but now I'm back and ready to start working again. Today was mostly finishing up the controlunit and ALUdecoder testbenches, I finished the modules over the last little bit, and most of this was spent fighting modelsim, which I started using because Icarus didn't like the verification method I chose. But I learned that .randomize() was exclusive to premium modelsim, which I do not have, so that solved that problem. Then my other key problem was trying to have two testbenches in one file, which seemed not to work well.
+
