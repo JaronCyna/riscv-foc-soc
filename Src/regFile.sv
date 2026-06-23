@@ -13,12 +13,18 @@ module regFile (
 
     logic [31:0] mainReg [0:31];
 
+    integer i;
+    initial begin
+        for (i = 0; i < 32; i = i + 1) begin
+            mainReg[i] = i; // x0=0, x1=1, x2=2, x3=3... x15=15
+        end
+    end
+
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            
-            for (int i = 0; i < 32; i++) begin
-                mainReg[i] <= 32'd0;
-            end
+        for (i = 0; i < 32; i = i + 1) begin
+            mainReg[i] = i; // x0=0, x1=1, x2=2, x3=3... x15=15
+        end
         end else if (we && (rw != 5'd0)) begin
             mainReg[rw] <= ww;
         end
