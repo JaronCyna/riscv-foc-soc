@@ -26,7 +26,23 @@ module top_module(
 
     // Instruction Fetch
 
+    // PC register
+    logic [31:0] branch_target;
     logic [31:0] pc_out, instruct;
+
+    logic branch_taken;
+    assign branch_taken = Branch & zero;
+    assign branch_target = pc_out + imm_ext;
+    PC_reg pc_reg(
+        .clk(clock),
+        .rst_n(rst_n),
+        .branch_taken(branch_taken),
+        .branch_target(branch_target),
+
+        .pc_out(pc_out)
+    );
+
+
 
     logic [31:0] normal_instruct;
     logic [31:0] switch_instruct;
@@ -94,8 +110,6 @@ module top_module(
     );
 
 
-    assign ww = MemtoReg ? read : out;
-
     //  Immediate generator
     ImmGen immgen(
         .inst(instrust_out),
@@ -110,9 +124,9 @@ module top_module(
         .rst(!rst_n),
         .rs1(instrust_out[19:15]),
         .rs2(instrust_out[24:20]),
-        .rw(instrust_out[11:7]),
-        .ww(ww), //Need to change these once mem stage is made
-        .we(RegWrite),
+        .rw(rd_WB),
+        .ww(ww),
+        .we(control_bits_WB[0]),
 
         .rd1(rd1),
         .rd2(rd2)
@@ -191,37 +205,49 @@ module top_module(
 
 
 
-    // PC register
-    logic [31:0] branch_target;
-
-    logic branch_taken;
-    assign branch_taken = Branch & zero;
-    assign branch_target = pc_out + imm_ext;
-    PC_reg pc_reg(
-        .clk(clean_cpu_clk),
-        .rst_n(rst_n),
-        .branch_taken(branch_taken),
-        .branch_target(branch_target),
-
-        .pc_out(pc_out)
-    );
-
-
-
- 
+    //MEM Stage
 
     // Data memory
 
+    logic [70:0] MEM_WB_IN;
+    logic [70:0] MEM_WB_OUT;
+
+    logic [3:0] control_bits_MEM;
+    logic [31:0] ALU_out_MEM, rd2_MEM;
+    logic [4:0] rd_MEM;
+
+    assign {control_bits_MEM, ALU_out_MEM, rd2_MEM, rd_MEM} = EX_MEM_OUT;
+
     DataMem datamem(
-        .clk(clean_cpu_clk),
-        .memRead(MemRead),
-        .memWrite(MemWrite),
-        .addr(out),
-        .write(rd2),
+        .clk(clock),
+        .memRead(control_bits_MEM[3]),
+        .memWrite(control_bits_MEM[2]),
+        .addr(ALU_out_MEM),
+        .write(rd2_MEM),
 
         .read(read)
     );
     
+    assign MEM_WB_IN = {control_bits_MEM[1:0], ALU_out_MEM, rd_MEM, read};
+
+    Pipeline_reg #(.Reg_size(71)) MEM_WB_Reg(
+        .clk(clock),
+        .rst_n(rst_n),
+        .data_in(MEM_WB_IN),
+        .data_out(MEM_WB_OUT)
+    );
+
+
+    // Write Back Stage
+
+    logic [1:0] control_bits_WB;
+    logic [31:0] ALU_out_WB, read_WB;
+    logic [4:0] rd_WB;
+
+    assign {control_bits_WB, ALU_out_WB, rd_WB, read_WB} = MEM_WB_OUT;
+
+    assign ww = control_bits_WB[1] ? read_WB : ALU_out_WB;
+
 
     // Digit 0 handles the lower 4 bits of the calculation result
     sevenSegDecoder display_digit_0 (
