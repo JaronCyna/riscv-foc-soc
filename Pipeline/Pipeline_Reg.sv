@@ -3,6 +3,7 @@ module Pipeline_reg(
 )(
     input logic clk,
     input logic rst_n,
+    input logic en;
     input logic [Reg_size-1:0] data_in,
 
     output logic [Reg_size-1:0] data_out 
@@ -10,8 +11,10 @@ module Pipeline_reg(
 
 
     always_ff @(posedge clk or negedge rst_n) begin
-        if(!rst_n) data_out <= Reg_size'd0;
-        else data_out <= data_in;
+        if(!rst_n) data_out <= Reg_size{1'd0};
+        else begin
+            if(en) data_out <= data_in;
+        end
     end
 
 endmodule
