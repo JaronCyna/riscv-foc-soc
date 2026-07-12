@@ -54,6 +54,10 @@ module Pipeline_reg_tb;
         if (data_out == 32'b0) $display("Test 4 Passed");
         else $error("Test 4 Failed");
 
+    end
+
+endmodule
+
 
 
     
