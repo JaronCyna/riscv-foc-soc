@@ -62,7 +62,36 @@ module Fwd_Unit_tb;
             control_bits_MEM = tx.ctrl_mem_val;
             control_bits_WB  = tx.ctrl_wb_val;
 
-            #10; 
+            #10;
+
+            // Rule for Operand A
+            if (control_bits_MEM[0] && (rw_MEM != 5'd0) && (rw_MEM == rs1_EX)) begin
+                assert (fwd1 == 2'b10) 
+                    else $error("Failed: Failed to forward rs1 from MEM stage! Expected 2'b10, got %b", fwd1);
+            end
+
+            // Rule for Operand B
+            if (control_bits_MEM[0] && (rw_MEM != 5'd0) && (rw_MEM == rs2_EX)) begin
+                assert (fwd2 == 2'b10) 
+                    else $error("Failed: Failed to forward rs2 from MEM stage! Expected 2'b10, got %b", fwd2);
+            end
+
+            // Rule for Operand A
+            if (control_bits_WB[0] && (rw_WB != 5'd0) && (rw_WB == rs1_EX) && 
+                !(control_bits_MEM[0] && (rw_MEM != 5'd0) && (rw_MEM == rs1_EX))) begin
+                assert (fwd1 == 2'b01) 
+                    else $error("Failed: Failed to forward rs1 from WB stage! Expected 2'b01, got %b", fwd1);
+            end
+
+            if (rw_MEM == 5'd0 || rw_WB == 5'd0) begin
+            if (rs1_EX == 5'd0) assert (fwd1 == 2'b00) else $error("Failed: Accidentally forwarded a value to rs1 from x0!");
+            if (rs2_EX == 5'd0) assert (fwd2 == 2'b00) else $error("Failed: Accidentally forwarded a value to rs2 from x0!");
+            end
+
+            if (!control_bits_MEM[0] && !control_bits_WB[0]) begin
+                assert (fwd1 == 2'b00) else $error("Failed: Forwarded rs1 when RegWrite was disabled!");
+                assert (fwd2 == 2'b00) else $error("Failed: Forwarded rs2 when RegWrite was disabled!");
+            end
 
         end
         
