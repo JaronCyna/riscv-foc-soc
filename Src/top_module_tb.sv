@@ -28,6 +28,15 @@ module CPU_tb;
         end
 
 
+        // This testing will be split into 2 primary parts, the first will be directed to check for data hazards
+        // The second will use CRT to test for a bunch of random situations
+
+        //PART 1 Data Hazard Checks
+
+        //1.1 RAW (Read-After-Write) EX-to-EX Forwarding
+
+        
+
 
         $finish;
     end

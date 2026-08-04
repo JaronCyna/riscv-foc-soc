@@ -1,27 +1,13 @@
-module top_module(
+module rv32i_5stage_core(
     input logic clk,
     input logic rst_n,
-    input logic btn_clk,
-    input logic [9:0] sw,
 
-    output logic [6:0] HEX0,
-    output logic [6:0] HEX1
-
+    output [31:0] out
 );
 
-
-
-    logic clean_cpu_clk;
     logic clock;
 
-    debouncer btn_filter (
-    .clk(clk),              
-    .rst_n(rst_n),
-    .raw_btn(btn_clk),      
-    .clean_btn(clean_cpu_clk) 
-);
-
-    assign clock = (sw[9]) ? clean_cpu_clk : clk;
+    assign clock = clk;
 
 
     // Instruction Fetch
@@ -48,26 +34,26 @@ module top_module(
 
 
     logic [31:0] normal_instruct;
-    logic [31:0] switch_instruct;
-
-    sw_imem SW_IMEM (
-        .sw(sw),
-        .inst(switch_instruct)
-    );
+    
 
     instructionMem instructionmem(
         .pc_out(pc_out),
         .instruct(normal_instruct)
     );
 
-    assign instruct = (sw[9]) ? switch_instruct : normal_instruct;
+    assign instruct = normal_instruct;
 
     logic [31:0] instruct_out;
+
+    logic [31:0] if_id_in;
+
+    // RISC-V NOP: 32'h00000013 when branch is 
+    assign if_id_in = (branch_taken) ? 32'h00000013 : instruct;
 
     Pipeline_reg IF_ID_Reg(
         .clk(clock),
         .rst_n(rst_n),
-        .data_in(instruct),
+        .data_in(if_id_in),
         .en(IF_IDWrite),
         .data_out(instruct_out)
     );
@@ -127,7 +113,7 @@ module top_module(
         .rst(!rst_n),
         .rs1(instruct_out[19:15]),
         .rs2(instruct_out[24:20]),
-        .rw(rd_WB),
+        .rw(rw_WB),
         .ww(ww),
         .we(control_bits_WB[0]),
 
@@ -160,6 +146,21 @@ module top_module(
 
     );
 
+    logic [31:0] branch_rd1, branch_rd2, alu_result;
+    logic [4:0]  rs1_ID, rs2_ID;
+
+    assign rs1_ID = instruct_out[19:15];
+    assign rs2_ID = instruct_out[24:20];
+
+    // Priority-based forwarding to ID stage comparison
+    assign branch_rd1 = ((rs1_ID != 0) && (rs1_ID == rw_EX)  && control_bits_EX[0])  ? alu_result :
+                        ((rs1_ID != 0) && (rs1_ID == rw_MEM) && control_bits_MEM[0]) ? ALU_out_MEM :
+                        ((rs1_ID != 0) && (rs1_ID == rw_WB)  && control_bits_WB[0])  ? ww : rd1;
+
+    assign branch_rd2 = ((rs2_ID != 0) && (rs2_ID == rw_EX)  && control_bits_EX[0])  ? alu_result :
+                        ((rs2_ID != 0) && (rs2_ID == rw_MEM) && control_bits_MEM[0]) ? ALU_out_MEM :
+                        ((rs2_ID != 0) && (rs2_ID == rw_WB)  && control_bits_WB[0])  ? ww : rd2;
+
     always_comb begin
         // Default: branch is not taken unless proven otherwise
         branch_taken = 1'b0; 
@@ -167,12 +168,12 @@ module top_module(
         // Only evaluate comparisons if the Control Unit says this is a Branch instruction
         if (Branch) begin
             case (funct3)
-                3'b000:  branch_taken = (rd1 == rd2); // BEQ (Branch Equal)
-                3'b001:  branch_taken = (rd1 != rd2); // BNE (Branch Not Equal)
-                3'b100:  branch_taken = ($signed(rd1) < $signed(rd2));  // BLT (Branch Less Than)
-                3'b101:  branch_taken = ($signed(rd1) >= $signed(rd2)); // BGE (Branch Greater Than)
-                3'b110:  branch_taken = (rd1 < rd2);  // BLTU (Branch Less Than, Unsigned)
-                3'b111:  branch_taken = (rd1 >= rd2); // BGEU (Branch Greater Than, Unsigned)
+                3'b000:  branch_taken = (branch_rd1 == branch_rd2); // BEQ (Branch Equal)
+                3'b001:  branch_taken = (branch_rd1 != branch_rd2); // BNE (Branch Not Equal)
+                3'b100:  branch_taken = ($signed(branch_rd1) < $signed(branch_rd2));  // BLT (Branch Less Than)
+                3'b101:  branch_taken = ($signed(branch_rd1) >= $signed(branch_rd2)); // BGE (Branch Greater Than)
+                3'b110:  branch_taken = (branch_rd1 < branch_rd2);  // BLTU (Branch Less Than, Unsigned)
+                3'b111:  branch_taken = (branch_rd1 >= branch_rd2); // BGEU (Branch Greater Than, Unsigned)
                 default: branch_taken = 1'b0;
             endcase
         end
@@ -240,7 +241,7 @@ module top_module(
 
 
 
-    assign base_alu_a = (sw[9]) ? {28'd0, sw[7:4]} : rd1_EX;
+    assign base_alu_a = rd1_EX;
 
     assign final_alu_a = (fwd1 == 2'b00) ? base_alu_a  : // fwd1 does not exist yet
                          (fwd1 == 2'b01) ? ww          :
@@ -250,7 +251,7 @@ module top_module(
                            (fwd2 == 2'b01) ? ww           :
                            (fwd2 == 2'b10) ? ALU_out_MEM  : 32'bx;
 
-    assign base_alu_b = (sw[9]) ? {28'd0, sw[3:0]} : forwarded_rd2;
+    assign base_alu_b = forwarded_rd2;
 
     assign in2 = control_bits_EX[10] ? imm_ext_EX : base_alu_b; // control_bits_EX[10] is ALUSrc 
 
@@ -259,11 +260,11 @@ module top_module(
         .a(final_alu_a),
         .b(in2),
         .sel(ALU_sel),
-        .out(out),
+        .out(alu_result),
         .zero(zero)
     );
     
-    assign EX_MEM_IN = {control_bits_EX[3:0], out, forwarded_rd2, rw_EX};
+    assign EX_MEM_IN = {control_bits_EX[3:0], alu_result, forwarded_rd2, rw_EX};
     Pipeline_reg #(.Reg_size(73)) EX_MEM_Reg(
         .clk(clock),
         .rst_n(rst_n),
@@ -314,18 +315,7 @@ module top_module(
 
     assign ww = control_bits_WB[1] ? read_WB : ALU_out_WB;
 
-
-    // Digit 0 handles the lower 4 bits of the calculation result
-    sevenSegDecoder display_digit_0 (
-        .bin_in(out[3:0]),
-        .seg_out(HEX0)
-    );
-
-    // Digit 1 handles the upper 4 bits of the calculation result
-    sevenSegDecoder display_digit_1 (
-        .bin_in(out[7:4]),
-        .seg_out(HEX1)
-    );
+    assign out = ww;
 
 
 endmodule

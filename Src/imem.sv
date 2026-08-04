@@ -8,15 +8,16 @@ module instructionMem #(parameter InsTot = 256)
 
 
     initial begin
-        memory[0] = 32'h00500093;  // addi x1, x0, 5
-        memory[1] = 32'h00A00113;  // addi x2, x0, 10
-        memory[2] = 32'h002081B3;  // add  x3, x1, x2
+        // Initialize memory with NOPs (0x00000013) to prevent 'X' states
+        for (int i = 0; i < InsTot; i++) begin
+            memory[i] = 32'h00000013;
+        end
+        $readmemh("program.hex", memory);
     end
 
-    // Will change to this when I have a compiled file to load from
-    // initial $readmemh("program.hex", memory);
+    logic [31:0] word_addr;
+    assign word_addr = pc_out/4; 
 
-    //Pick the instruction defined by the program counter
-    assign instruct = memory[pc_out/4];
-    
+    assign instruct = (word_addr < InsTot) ? memory[word_addr] : 32'h00000013; // Default to NOP if out-of-bounds    
+
 endmodule
