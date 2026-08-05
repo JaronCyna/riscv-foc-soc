@@ -12,7 +12,7 @@ module instructionMem #(parameter InsTot = 256)
         for (int i = 0; i < InsTot; i++) begin
             memory[i] = 32'h00000013;
         end
-        $readmemh("program.hex", memory);
+        $readmemh("C:\Users\Jaron\OneDrive\Desktop\CPU\Pipeline\program.hex", memory);
     end
 
     logic [31:0] word_addr;
