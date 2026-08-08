@@ -48,3 +48,10 @@ I managed to get the ALU working with minimal hassle, but to understand the immg
 
 I took a good bit of time off to go to Utah for URC, which was a great experience, but now I'm back and ready to start working again. Today was mostly finishing up the controlunit and ALUdecoder testbenches, I finished the modules over the last little bit, and most of this was spent fighting modelsim, which I started using because Icarus didn't like the verification method I chose. But I learned that .randomize() was exclusive to premium modelsim, which I do not have, so that solved that problem. Then my other key problem was trying to have two testbenches in one file, which seemed not to work well.
 
+
+
+# Aug 7th
+
+I haven't documented in a little bit but something very interesting just happened that I wanted to save. So I have my python script which auto generates machine code to make a CRT for testing the cpu. Then I would run the assembly through my cpu and through a verified working method, such as the online venus site. The main issue I found was my CPU was failing 8-9 out of 10 times from my random CRT. After looking instruction by instruction I noticed that when something wa being written the the registers when the ALU was taking that register in the same clock cycle, it would break. I fixed this by making a combinational assignment which hardwires the input to the register if the ALU is calling for the same value that is being written to.
+
+After that it was passing basically every one, so I decided to increase it to 20000 instructions, and then it started failing again. For this, I needed to make 3 fixes, the first one was simple, in my program counter, I was changing it even when the enable was low. Then, a little more complicated, but when forwarding a value after a lw instruction, I wasn't taken iinito account that it was a memmory operation, and therefore needed to wait until the MEM stage before taking the value, and due to that, It would grab a non-existant value effectivley and add it

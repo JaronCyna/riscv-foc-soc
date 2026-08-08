@@ -9,7 +9,7 @@ always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         pc_out <= 32'h0;
     end else begin
-        if (branch_taken) begin
+        if (branch_taken && en) begin
             pc_out <= branch_target;
 
         end else if (en) begin

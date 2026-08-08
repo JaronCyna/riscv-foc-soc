@@ -20,7 +20,7 @@ module rv32i_5stage_core(
     logic PCWrite;
 
     logic branch_taken;
-    assign branch_target = pc_out + imm_ext;
+    assign branch_target = pc_ID + imm_ext;
     PC_reg pc_reg(
         .clk(clock),
         .rst_n(rst_n),
@@ -44,19 +44,23 @@ module rv32i_5stage_core(
     assign instruct = normal_instruct;
 
     logic [31:0] instruct_out;
-
     logic [31:0] if_id_in;
+    logic [63:0] if_id_in_bus, if_id_out_bus;
+    logic [31:0] pc_ID;
 
     // RISC-V NOP: 32'h00000013 when branch is 
     assign if_id_in = (branch_taken) ? 32'h00000013 : instruct;
+    assign if_id_in_bus = {pc_out, if_id_in};
 
-    Pipeline_reg IF_ID_Reg(
+    Pipeline_reg #(.Reg_size(64)) IF_ID_Reg(
         .clk(clock),
         .rst_n(rst_n),
-        .data_in(if_id_in),
+        .data_in(if_id_in_bus),
         .en(IF_IDWrite),
-        .data_out(instruct_out)
+        .data_out(if_id_out_bus)
     );
+
+    assign {pc_ID, instruct_out} = if_id_out_bus;
 
     //Instuction Decode
 
@@ -75,7 +79,7 @@ module rv32i_5stage_core(
 
     logic [31:0] ww, rd1, rd2;
         
-    logic [31:0] out, base_alu_b;
+    logic [31:0] base_alu_b;
     logic [31:0] read;
 
     logic zero;
@@ -127,8 +131,8 @@ module rv32i_5stage_core(
         MemtoReg, RegWrite
     };
 
-    logic [121:0] ID_EX_Out;
-    logic [121:0] ID_EX_In;
+    logic [185:0] ID_EX_Out;
+    logic [185:0] ID_EX_In;
     logic [10:0] Bubble_Mux, control_bits_EX;
     logic bubble;
     logic [4:0] rw_EX;
@@ -151,14 +155,17 @@ module rv32i_5stage_core(
 
     assign rs1_ID = instruct_out[19:15];
     assign rs2_ID = instruct_out[24:20];
+    
+    logic [31:0] branch_mem_fwd;
+    assign branch_mem_fwd = control_bits_MEM[3] ? read : ALU_out_MEM;
 
     // Priority-based forwarding to ID stage comparison
-    assign branch_rd1 = ((rs1_ID != 0) && (rs1_ID == rw_EX)  && control_bits_EX[0])  ? alu_result :
-                        ((rs1_ID != 0) && (rs1_ID == rw_MEM) && control_bits_MEM[0]) ? ALU_out_MEM :
+    assign branch_rd1 = ((rs1_ID != 0) && (rs1_ID == rw_EX)  && control_bits_EX[0] && !control_bits_EX[3])  ? alu_result :
+                        ((rs1_ID != 0) && (rs1_ID == rw_MEM) && control_bits_MEM[0]) ? branch_mem_fwd :
                         ((rs1_ID != 0) && (rs1_ID == rw_WB)  && control_bits_WB[0])  ? ww : rd1;
 
-    assign branch_rd2 = ((rs2_ID != 0) && (rs2_ID == rw_EX)  && control_bits_EX[0])  ? alu_result :
-                        ((rs2_ID != 0) && (rs2_ID == rw_MEM) && control_bits_MEM[0]) ? ALU_out_MEM :
+    assign branch_rd2 = ((rs2_ID != 0) && (rs2_ID == rw_EX)  && control_bits_EX[0] && !control_bits_EX[3])  ? alu_result :
+                        ((rs2_ID != 0) && (rs2_ID == rw_MEM) && control_bits_MEM[0]) ? branch_mem_fwd :
                         ((rs2_ID != 0) && (rs2_ID == rw_WB)  && control_bits_WB[0])  ? ww : rd2;
 
     always_comb begin
@@ -180,11 +187,11 @@ module rv32i_5stage_core(
     end
 
     assign Bubble_Mux = (bubble) ?  11'b0 : control_bits;
-    assign ID_EX_In = {Bubble_Mux, rd1, rd2, instruct_out[19:15], 
+    assign ID_EX_In = {pc_ID, instruct_out, Bubble_Mux, rd1, rd2, instruct_out[19:15], 
                        instruct_out[24:20], instruct_out[11:7], imm_ext
                       };
 
-    Pipeline_reg #(.Reg_size(122)) ID_EX_Reg(
+    Pipeline_reg #(.Reg_size(186)) ID_EX_Reg(
         .clk(clock),
         .rst_n(rst_n),
         .data_in(ID_EX_In),
@@ -194,12 +201,13 @@ module rv32i_5stage_core(
 
     // EX Stage
 
-    logic [72:0] EX_MEM_IN;
-    logic [72:0] EX_MEM_OUT;
+    logic [136:0] EX_MEM_IN;
+    logic [136:0] EX_MEM_OUT;
+    logic [31:0] pc_EX, inst_EX;
     logic [31:0] rd1_EX, rd2_EX, imm_ext_EX;
     logic [4:0]  rs1_EX, rs2_EX;
 
-    assign {control_bits_EX, rd1_EX, rd2_EX, rs1_EX, rs2_EX, rw_EX, imm_ext_EX} = ID_EX_Out;
+    assign {pc_EX, inst_EX, control_bits_EX, rd1_EX, rd2_EX, rs1_EX, rs2_EX, rw_EX, imm_ext_EX} = ID_EX_Out;
 
     // ALU select decoder
     
@@ -243,13 +251,14 @@ module rv32i_5stage_core(
 
     assign base_alu_a = rd1_EX;
 
-    assign final_alu_a = (fwd1 == 2'b00) ? base_alu_a  : // fwd1 does not exist yet
-                         (fwd1 == 2'b01) ? ww          :
-                         (fwd1 == 2'b10) ? ALU_out_MEM : 32'bx;
-
+    logic [31:0] mem_fwd_val;
+    assign mem_fwd_val = control_bits_MEM[3] ? read : ALU_out_MEM;
+    assign final_alu_a =   (fwd1 == 2'b00) ? base_alu_a  :
+                           (fwd1 == 2'b01) ? ww          :
+                           (fwd1 == 2'b10) ? mem_fwd_val : 32'bx;
     assign forwarded_rd2 = (fwd2 == 2'b00) ? rd2_EX       : 
                            (fwd2 == 2'b01) ? ww           :
-                           (fwd2 == 2'b10) ? ALU_out_MEM  : 32'bx;
+                           (fwd2 == 2'b10) ? mem_fwd_val  : 32'bx;
 
     assign base_alu_b = forwarded_rd2;
 
@@ -264,8 +273,8 @@ module rv32i_5stage_core(
         .zero(zero)
     );
     
-    assign EX_MEM_IN = {control_bits_EX[3:0], alu_result, forwarded_rd2, rw_EX};
-    Pipeline_reg #(.Reg_size(73)) EX_MEM_Reg(
+    assign EX_MEM_IN = {pc_EX, inst_EX, control_bits_EX[3:0], alu_result, forwarded_rd2, rw_EX};
+    Pipeline_reg #(.Reg_size(137)) EX_MEM_Reg(
         .clk(clock),
         .rst_n(rst_n),
         .data_in(EX_MEM_IN),
@@ -279,12 +288,13 @@ module rv32i_5stage_core(
 
     // Data memory
 
-    logic [70:0] MEM_WB_IN;
-    logic [70:0] MEM_WB_OUT;
+    logic [134:0] MEM_WB_IN;
+    logic [134:0] MEM_WB_OUT;
+    logic [31:0] pc_MEM, inst_MEM;
 
     logic [31:0] ALU_out_MEM, rd2_MEM;
 
-    assign {control_bits_MEM, ALU_out_MEM, rd2_MEM, rw_MEM} = EX_MEM_OUT;
+    assign {pc_MEM, inst_MEM, control_bits_MEM, ALU_out_MEM, rd2_MEM, rw_MEM} = EX_MEM_OUT;
 
     DataMem datamem(
         .clk(clock),
@@ -296,9 +306,9 @@ module rv32i_5stage_core(
         .read(read)
     );
     
-    assign MEM_WB_IN = {control_bits_MEM[1:0], ALU_out_MEM, rw_MEM, read};
+    assign MEM_WB_IN = {pc_MEM, inst_MEM, control_bits_MEM[1:0], ALU_out_MEM, rw_MEM, read};
 
-    Pipeline_reg #(.Reg_size(71)) MEM_WB_Reg(
+    Pipeline_reg #(.Reg_size(135)) MEM_WB_Reg(
         .clk(clock),
         .rst_n(rst_n),
         .data_in(MEM_WB_IN),
@@ -309,9 +319,10 @@ module rv32i_5stage_core(
 
     // Write Back Stage
 
+    logic [31:0] pc_WB, inst_WB;
     logic [31:0] ALU_out_WB, read_WB;
 
-    assign {control_bits_WB, ALU_out_WB, rw_WB, read_WB} = MEM_WB_OUT;
+    assign {pc_WB, inst_WB, control_bits_WB, ALU_out_WB, rw_WB, read_WB} = MEM_WB_OUT;
 
     assign ww = control_bits_WB[1] ? read_WB : ALU_out_WB;
 

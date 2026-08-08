@@ -56,7 +56,7 @@ def RType(Version, Rs1, Rs2, Rd):
         comb = f"{funct7}{rs2_b}{rs1_b}{funct3}{rd_b}{opcode}"
 
         if Rd != 0:
-            x[Rd] = res & 0xFFFFFFFF
+            x[Rd] = res % (1 << 32)
         x[0] = 0
 
         return f"0x{int(comb, 2):08x}"
@@ -72,12 +72,12 @@ def IType(Version, Rs1, Val, Rd):
             funct3 = '000'
             res = Val + x[Rs1]
             if Rd != 0:
-                x[Rd] = res & 0xFFFFFFFF
+                x[Rd] = res % (1 << 32)
         elif(Version == 1): #LW
             funct3 = '010'
-            addr = int((x[Rs1] + Val) & 0x7F)
+            addr = int(((x[Rs1] + Val) & 0x1FF) // 4)
             if Rd != 0:
-                x[Rd] = mem[addr] & 0xFFFFFFFF
+                x[Rd] = mem[addr] % (1 << 32)
 
         else:
             raise ValueError("Version must be 0 or 1")
@@ -104,7 +104,8 @@ def SType(Val, Rs1, Rs2):
 
         opcode = '0100011'
 
-        addr = (x[Rs1] + Val) & 0x7F
+        addr = int(((x[Rs1] + Val) & 0x1FF) // 4)
+
         mem[addr] = x[Rs2]
 
         comb = f"{imm[:7]}{rs2_b}{rs1_b}{funct3}{imm[7:]}{opcode}"
@@ -114,7 +115,7 @@ def SType(Val, Rs1, Rs2):
 
 def BType(Val, Rs1, Rs2):
     if not branch:
-        byte_offset = (Val % 8 + 1) * 4 
+        byte_offset = (Val % 32 + 1) * 4 
         imm_val = byte_offset & 0x1FFF
         imm = f"{imm_val:013b}"
 
@@ -155,27 +156,78 @@ def RandomizeType(Regs):
     if(INST == 4): 
         instr, branch_taken, new_jump = BType(val, rs1, rs2)
 
-    if branch_taken and not branch:
-        branch = True
-        jump = new_jump
-
     if branch:
         jump -= 1
         if jump <= 0:
             branch = False
+    elif branch_taken:
+        branch = True
+        jump = new_jump
 
     return instr
 
-for num in range(100):
+for num in range(2000):
     Inst = RandomizeType(REGS)
     instructions.append(int(Inst, 16))
+    print(f"\n instruction number {num+1} is {Inst}")
+    print("=== EXPECTED REGISTER VALUES FOR VERIFICATION", num+18)
+    for i in range(6):
+        print(f"  x{i} = {x[i]}")
 
-with open("program.hex", "w", encoding="utf-8") as f:
+
+with open("Pipeline/program.hex", "w", encoding="utf-8") as f:
     for inst in instructions:
         f.write(f"{inst:08x}\n")
-
 
 print("Generated program.hex successfully!")
 print("\n=== EXPECTED REGISTER VALUES FOR VERIFICATION ===")
 for i in range(6):
     print(f"  x{i} = {x[i]}")
+
+
+
+
+
+
+with open("Pipeline/5_Stage_tb.sv", "r", encoding="utf-8") as f:
+    tb = f.read()
+# Update the assertion check in the testbench
+import re
+new_if = f"""if (CPU.regfile.mainReg[0] == {x[0]}  &&
+            CPU.regfile.mainReg[1] == {x[1]}  && 
+            CPU.regfile.mainReg[2] == {x[2]}  && 
+            CPU.regfile.mainReg[3] == {x[3]}  && 
+            CPU.regfile.mainReg[4] == {x[4]}  && 
+            CPU.regfile.mainReg[5] == {x[5]}) begin"""
+tb = re.sub(r'if \(CPU\.regfile\.mainReg\[0\].*?begin', new_if, tb, flags=re.DOTALL)
+with open("Pipeline/5_Stage_tb.sv", "w", encoding="utf-8") as f:
+    f.write(tb)
+
+
+from capstone import *
+
+md = Cs(CS_ARCH_RISCV, CS_MODE_RISCV32)
+
+with open("Pipeline/program.s", "w", encoding="utf-8") as out_f:
+    out_f.write(".text\n.globl main\nmain:\n")
+    
+    pc = 0
+    disassembled = []
+    
+    for hex_line in instructions:
+        raw_bytes = hex_line.to_bytes(4, byteorder='little')
+        for insn in md.disasm(raw_bytes, pc):
+            disassembled.append((pc, insn.mnemonic, insn.op_str))
+        pc += 4
+        
+    for addr, op, args in disassembled:
+        # Check if instruction is a branch and convert numeric target to label L_<target>
+        if op.startswith('b'):
+            parts = [p.strip() for p in args.rsplit(',', 1)]
+            if len(parts) == 2 and (parts[1].startswith('0x') or parts[1].isdigit()):
+                target_pc = int(parts[1], 0) if parts[1].startswith('0x') else int(parts[1])
+                args = f"{parts[0]}, L_{target_pc}"
+                
+        out_f.write(f"L_{addr}: {op} {args}\n")
+
+print("Generated Venus-compatible Pipeline/program.s successfully!")

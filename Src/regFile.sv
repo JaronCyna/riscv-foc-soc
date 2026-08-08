@@ -16,14 +16,14 @@ module regFile (
     integer i;
     initial begin
         for (i = 0; i < 32; i = i + 1) begin
-            mainReg[i] = i; // x0=0, x1=1, x2=2, x3=3... x15=15
+            mainReg[i] = 0; // x0=0, x1=1, x2=2, x3=3... x15=15
         end
     end
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
         for (i = 0; i < 32; i = i + 1) begin
-            mainReg[i] = i; // x0=0, x1=1, x2=2, x3=3... x15=15
+            mainReg[i] = 0; // x0=0, x1=1, x2=2, x3=3... x15=15
         end
         end else if (we && (rw != 5'd0)) begin
             mainReg[rw] <= ww;
@@ -32,8 +32,8 @@ module regFile (
 
     
     always_comb begin
-        rd1 = (rs1 == 5'd0) ? 32'd0 : mainReg[rs1];
-        rd2 = (rs2 == 5'd0) ? 32'd0 : mainReg[rs2];
+        rd1 = (rs1 == 5'd0) ? 32'd0 : (we && (rs1 == rw)) ? ww : mainReg[rs1];
+        rd2 = (rs2 == 5'd0) ? 32'd0 : (we && (rs2 == rw)) ? ww : mainReg[rs2];
     end
 
 endmodule
