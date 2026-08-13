@@ -20,12 +20,22 @@ module rv32i_5stage_core(
     logic PCWrite;
 
     logic branch_taken;
+    logic jump_taken;
+    logic [31:0] jump_target;
+    logic [31:0] pc_next_target;
+    logic redirect_pc;
+
     assign branch_target = pc_ID + imm_ext;
+    assign jump_target = (instruct_out[6:0] == 7'h67) ? ((branch_rd1 + imm_ext) & ~32'h1) : (pc_ID + imm_ext);
+    assign jump_taken = (instruct_out[6:0] == 7'h6F || instruct_out[6:0] == 7'h67);
+    assign redirect_pc = branch_taken || jump_taken;
+    assign pc_next_target = jump_taken ? jump_target : branch_target;
+
     PC_reg pc_reg(
         .clk(clock),
         .rst_n(rst_n),
-        .branch_taken(branch_taken),
-        .branch_target(branch_target),
+        .branch_taken(redirect_pc),
+        .branch_target(pc_next_target),
         .en(PCWrite),
 
         .pc_out(pc_out)
@@ -48,8 +58,8 @@ module rv32i_5stage_core(
     logic [63:0] if_id_in_bus, if_id_out_bus;
     logic [31:0] pc_ID;
 
-    // RISC-V NOP: 32'h00000013 when branch is 
-    assign if_id_in = (branch_taken) ? 32'h00000013 : instruct;
+    // RISC-V NOP: 32'h00000013 when branch/jump taken
+    assign if_id_in = (redirect_pc) ? 32'h00000013 : instruct;
     assign if_id_in_bus = {pc_out, if_id_in};
 
     Pipeline_reg #(.Reg_size(64)) IF_ID_Reg(
@@ -249,7 +259,10 @@ module rv32i_5stage_core(
 
 
 
-    assign base_alu_a = rd1_EX;
+    logic [31:0] alu_a_src;
+    assign alu_a_src = (inst_EX[6:0] == 7'h37) ? 32'd0 :
+                       (inst_EX[6:0] == 7'h17 || inst_EX[6:0] == 7'h6F || inst_EX[6:0] == 7'h67) ? pc_EX : rd1_EX;
+    assign base_alu_a = alu_a_src;
 
     logic [31:0] mem_fwd_val;
     assign mem_fwd_val = control_bits_MEM[3] ? read : ALU_out_MEM;
@@ -262,7 +275,10 @@ module rv32i_5stage_core(
 
     assign base_alu_b = forwarded_rd2;
 
-    assign in2 = control_bits_EX[10] ? imm_ext_EX : base_alu_b; // control_bits_EX[10] is ALUSrc 
+    logic [31:0] alu_b_src;
+    assign alu_b_src = (inst_EX[6:0] == 7'h6F || inst_EX[6:0] == 7'h67) ? 32'd4 :
+                       (control_bits_EX[10] ? imm_ext_EX : base_alu_b);
+    assign in2 = alu_b_src; 
 
     
     ALU alu(

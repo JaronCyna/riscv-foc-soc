@@ -1,0 +1,1 @@
+riscv32-unknown-elf-gcc -march=rv32i -mabi=ilp32 -msoft-float -O2 %1 -o test_compiling.elf && riscv32-unknown-elf-objcopy -O verilog test_compiling.elf Pipeline/program.hex
