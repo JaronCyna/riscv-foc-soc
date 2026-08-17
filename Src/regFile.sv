@@ -1,4 +1,4 @@
-module regFile (
+module regFile #(parameter WRITE_THROUGH = 1)(
     input logic clk,
     input logic rst,        // Wire up to FPGA master reset button
     input logic [4:0] rs1,  // reading registers
@@ -32,8 +32,14 @@ module regFile (
 
     
     always_comb begin
-        rd1 = (rs1 == 5'd0) ? 32'd0 : (we && (rs1 == rw)) ? ww : mainReg[rs1];
-        rd2 = (rs2 == 5'd0) ? 32'd0 : (we && (rs2 == rw)) ? ww : mainReg[rs2];
+        if(WRITE_THROUGH == 1) begin
+            rd1 = (rs1 == 5'd0) ? 32'd0 : (we && (rs1 == rw)) ? ww : mainReg[rs1];
+            rd2 = (rs2 == 5'd0) ? 32'd0 : (we && (rs2 == rw)) ? ww : mainReg[rs2];
+        end
+        else begin
+            rd1 = (rs1 == 5'd0) ? 32'd0 : mainReg[rs1];
+            rd2 = (rs2 == 5'd0) ? 32'd0 : mainReg[rs2];
+        end
     end
 
 endmodule

@@ -11,7 +11,7 @@ module DataMem(
     // 128 rows of 32-bit memory
     logic [31:0] RAM [0:127];
 
-    // Safe Power-up/Simulation Initialization (Maps perfectly to BRAM config)
+    // Initialization
     initial begin
         for (int i = 0; i < 128; i++) begin
             RAM[i] = 32'd0;
