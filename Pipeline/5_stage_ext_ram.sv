@@ -1,8 +1,13 @@
 module rv32i_5stage_core(
     input logic clk,
     input logic rst_n,
+    input logic [31:0] read_MEM,
 
-    output logic [31:0] out
+    output logic [31:0] out,
+    output logic [31:0] out_MEM,
+    output logic [31:0] rd_out_MEM,
+    output logic memWrite_MEM,
+    output logic memRead_MEM
 );
 
     logic clock;
@@ -312,15 +317,13 @@ module rv32i_5stage_core(
 
     assign {pc_MEM, inst_MEM, control_bits_MEM, ALU_out_MEM, rd2_MEM, rw_MEM} = EX_MEM_OUT;
 
-    DataMem datamem(
-        .clk(clock),
-        .memRead(control_bits_MEM[3]),
-        .memWrite(control_bits_MEM[2]),
-        .addr(ALU_out_MEM),
-        .write(rd2_MEM),
 
-        .read(read)
-    );
+    assign out_MEM = ALU_out_MEM;
+    assign rd_out_MEM = rd2_MEM;
+    assign memRead_MEM = control_bits_MEM[3];
+    assign memWrite_MEM = control_bits_MEM[2];
+    
+    assign read = read_MEM;
     
     assign MEM_WB_IN = {pc_MEM, inst_MEM, control_bits_MEM[1:0], ALU_out_MEM, rw_MEM, read};
 
